@@ -40,6 +40,7 @@ use warnings;
 use Carp;
 use Sendmail::Milter 0.18; # get needed constants
 use Socket;
+use IO::Select;
 use UNIVERSAL;
 
 use Sendmail::PMilter qw(:all);
@@ -324,7 +325,15 @@ sub read_block {
 
 	$$bufref = '';
 
+	my $s = new IO::Select;
+
 	while ($len > $sofar) {
+
+		$s->add($socket);
+
+		my @ready = $s->can_read(15);
+		return undef unless scalar @ready; # timeout
+
 		my $read = $socket->sysread($$bufref, $len - $sofar, $sofar);
 		return undef if (!defined($read) || $read <= 0); # if EOF
 		$sofar += $read;
