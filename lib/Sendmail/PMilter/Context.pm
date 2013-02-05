@@ -92,10 +92,11 @@ use constant SMFIC_HEADER	=> 'L';
 use constant SMFIC_MAIL		=> 'M';
 use constant SMFIC_EOH		=> 'N';
 use constant SMFIC_OPTNEG	=> 'O';
-use constant SMFIC_RCPT		=> 'R';
 use constant SMFIC_QUIT		=> 'Q';
+use constant SMFIC_RCPT		=> 'R';
 use constant SMFIC_DATA		=> 'T'; # v4
 use constant SMFIC_UNKNOWN	=> 'U'; # v3
+use constant SMFIC_QUIT_NC	=> 'K'; # v6?
 
 use constant SMFIR_ADDRCPT	=> '+';
 use constant SMFIR_DELRCPT	=> '-';
@@ -113,14 +114,17 @@ use constant SMFIR_SETSENDER	=> 's';
 use constant SMFIR_TEMPFAIL	=> 't';
 use constant SMFIR_REPLYCODE	=> 'y';
 
-use constant SMFIP_NOCONNECT	=> 0x01;
-use constant SMFIP_NOHELO	=> 0x02;
-use constant SMFIP_NOMAIL	=> 0x04;
-use constant SMFIP_NORCPT	=> 0x08;
-use constant SMFIP_NOBODY	=> 0x10;
-use constant SMFIP_NOHDRS	=> 0x20;
-use constant SMFIP_NOEOH	=> 0x40;
-use constant SMFIP_NONE		=> 0x7F;
+use constant SMFIP_NOCONNECT	=> 0x0001;
+use constant SMFIP_NOHELO	=> 0x0002;
+use constant SMFIP_NOMAIL	=> 0x0004;
+use constant SMFIP_NORCPT	=> 0x0008;
+use constant SMFIP_NOBODY	=> 0x0010;
+use constant SMFIP_NOHDRS	=> 0x0020;
+use constant SMFIP_NOEOH	=> 0x0040;
+use constant SMFIP_NR_HDR	=> 0x0080;
+use constant SMFIP_NOUNKNOWN	=> 0x0100;
+use constant SMFIP_NODATA	=> 0x0200;
+use constant SMFIP_NONE		=> 0x03FF; # mask for v4
 
 ##### Private data
 
@@ -157,11 +161,13 @@ sub new ($$$$) {
 	# We always need MAIL FROM: to determine start-of-message.
 
 	$this->{protocol} = SMFIP_NONE & ~(SMFIP_NOCONNECT|SMFIP_NOMAIL);
-	$this->{protocol} &= ~SMFIP_NOHELO if $callbacks->{helo};
-	$this->{protocol} &= ~SMFIP_NORCPT if $callbacks->{envrcpt};
-	$this->{protocol} &= ~SMFIP_NOBODY if $callbacks->{body};
-	$this->{protocol} &= ~SMFIP_NOHDRS if $callbacks->{header};
-	$this->{protocol} &= ~SMFIP_NOEOH if $callbacks->{eoh};
+	$this->{protocol} &= ~SMFIP_NOHELO if $callbacks->{'helo'};
+	$this->{protocol} &= ~SMFIP_NORCPT if $callbacks->{'envrcpt'};
+	$this->{protocol} &= ~SMFIP_NOBODY if $callbacks->{'body'};
+	$this->{protocol} &= ~SMFIP_NOHDRS if $callbacks->{'header'};
+	$this->{protocol} &= ~SMFIP_NR_HDR if $callbacks->{'header'};
+	$this->{protocol} &= ~SMFIP_NODATA if $callbacks->{'data'};
+	$this->{protocol} &= ~SMFIP_NOEOH if $callbacks->{'eoh'};
 
 	$this;
 }
@@ -187,7 +193,7 @@ sub main ($) {
 			$this->read_block(\$buf, 4) || last;
 			my $len = unpack('N', $buf);
 
-			die "bad packet length $len\n" if ($len <= 0 || $len > 131072);
+			die "bad packet length $len\n" if $len <= 0;
 
 			# save the overhead of stripping the first byte from $buf
 			$this->read_block(\$buf, 1) || last;
