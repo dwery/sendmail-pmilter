@@ -203,10 +203,14 @@ sub main ($) {
 			$this->read_block(\$buf, $len - 1) || die "EOF in stream\n";
 
 			if ($cmd eq SMFIC_ABORT) {
+
 				delete $this->{symbols}{&SMFIC_MAIL};
 				$this->call_hooks('abort');
+
 			} elsif ($cmd eq SMFIC_BODY) {
+
 				$this->call_hooks('body', $buf, length($buf));
+
 			} elsif ($cmd eq SMFIC_CONNECT) {
 				# Perl RE doesn't like matching multiple \0 instances.
 				# To avoid problems, we slice the string to the first null,
@@ -238,8 +242,11 @@ sub main ($) {
 				}
 
 				$this->call_hooks('connect', $host, $pack);
+
 			} elsif ($cmd eq SMFIC_MACRO) {
-				die "SMFIC_MACRO: empty packet\n" unless ($buf =~ s/^(.)//);
+
+				die "SMFIC_MACRO: empty packet\n"
+					unless ($buf =~ s/^(.)//);
 
 				my $code = $this->{lastsymbol} = $1;
 				my $marray = &$split_buf;
@@ -252,51 +259,74 @@ sub main ($) {
 				while (my ($name, $value) = each(%macros)) {
 					$this->{symbols}{$code}{$name} = $value;
 				}
+
 			} elsif ($cmd eq SMFIC_BODYEOB) {
+
 				$this->call_hooks('eom');
+
 			} elsif ($cmd eq SMFIC_HELO) {
+
 				my $helo = &$split_buf;
 				die "SMFIC_HELO: bad packet\n" unless (@$helo == 1);
 
 				$this->call_hooks('helo', @$helo);
+
 			} elsif ($cmd eq SMFIC_HEADER) {
+
 				my $header = &$split_buf;
 
 				# empty value: ensure an empty string
 				push(@$header, '') if (@$header == 1);
 
 				$this->call_hooks('header', @$header);
+
 			} elsif ($cmd eq SMFIC_MAIL) {
+
 				delete $this->{symbols}{&SMFIC_MAIL}
 					if ($this->{lastsymbol} ne SMFIC_MAIL);
 
 				my $envfrom = &$split_buf;
-				die "SMFIC_MAIL: bad packet\n" unless (@$envfrom >= 1);
+				#die "SMFIC_MAIL: bad packet\n" unless (@$envfrom >= 1);
 
-				$this->call_hooks('envfrom', @$envfrom);
+				$this->call_hooks('envfrom', @$envfrom)
+					if scalar @$envfrom >= 1;
+
 			} elsif ($cmd eq SMFIC_EOH) {
+
 				$this->call_hooks('eoh');
+
 			} elsif ($cmd eq SMFIC_OPTNEG) {
-				die "SMFIC_OPTNEG: packet has wrong size\n" unless (length($buf) == 12);
+
+				die "SMFIC_OPTNEG: packet has wrong size\n"
+					unless (length($buf) == 12);
 
 				my ($ver, $actions, $protocol) = unpack('NNN', $buf);
 				die "SMFIC_OPTNEG: unknown milter protocol version $ver\n" unless ($ver >= 2 && $ver <= 6);
 
-				$this->write_packet(SMFIC_OPTNEG, pack('NNN', 2,
+				# we declare protocol v4. v6 should work but not v6 specific
+				# feature has been implemented.
+
+				$this->write_packet(SMFIC_OPTNEG, pack('NNN', 4,
 					$this->{callback_flags} & $actions,
 					$this->{protocol} & $protocol));
-			} elsif ($cmd eq SMFIC_RCPT) {
-				my $envrcpt = &$split_buf;
-				die "SMFIC_RCPT: bad packet\n" unless (@$envrcpt >= 1);
 
-				$this->call_hooks('envrcpt', @$envrcpt);
+			} elsif ($cmd eq SMFIC_RCPT) {
+
+				my $envrcpt = &$split_buf;
+
+				$this->call_hooks('envrcpt', @$envrcpt)
+					if scalar @$envrcpt >= 1;
 
 				delete $this->{symbols}{&SMFIC_RCPT};
+
 			} elsif ($cmd eq SMFIC_DATA) {
 				$this->call_hooks('data');
 			} elsif ($cmd eq SMFIC_QUIT) {
 				last;
 				# that's all, folks!
+			} elsif ($cmd eq SMFIC_QUIT_NC) {
+				# placeholder, close + connect ?
+				last;
 			} elsif ($cmd eq SMFIC_UNKNOWN) {
 				# this is not an unknown packet, but a packet
 				# to tell the milter that an unknown smtp command
@@ -310,7 +340,7 @@ sub main ($) {
 	my $err = $@;
 	$this->call_hooks('close');
 
-	# XXX better error handling?  die here to let an eval further up get it?
+	# XXX better error handling? die here to let an eval further up get it?
 	if ($err) {
 		$this->write_packet(SMFIR_TEMPFAIL) if defined($socket);
 		warn $err;
