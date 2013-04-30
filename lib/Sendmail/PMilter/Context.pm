@@ -460,12 +460,12 @@ sub getpriv ($) {
 Retrieves the macro symbol named NAME from the macros available from the MTA
 for the current callback.  This typically consists of a one-letter macro
 name, or a multi-letter macro name enclosed in {curly braces}.  If the
-requested macro was not defined by the MTA ny the time getsymval is called,
+requested macro was not defined by the MTA by the time getsymval is called,
 returns undef.
 
-Some common macros include the following.  (Since milter is a protocol first
+Some common macros include the following. (Since milter is a protocol first
 implemented in the Sendmail MTA, the macro names are the same as those in
-Sendmail itself.)
+Sendmail itself).
 
 =over 2
 
@@ -520,7 +520,8 @@ sub getsymval ($$) {
 	foreach my $code (SMFIC_RCPT, SMFIC_MAIL, SMFIC_HELO, SMFIC_CONNECT) {
 		my $val = $this->{symbols}{$code}{$key};
 
-		return $val if defined($val);
+		return $val
+			if defined $val;
 	}
 
 	undef;
