@@ -621,10 +621,11 @@ Returns a true value on success, undef on failure.
 sub addheader ($$$) {
 	my $this = shift;
 	my $header = shift || die "addheader: no header name\n";
-	my $value = shift || die "addheader: no header value\n";
+	my $value = shift;
 
 	die "addheader: called outside of EOM\n" if ($this->{cb} ne 'eom');
 	die "addheader: SMFIF_ADDHDRS not in capability list\n" unless ($this->{callback_flags} & SMFIF_ADDHDRS);
+	die "addheader: no header value\n" unless defined $value;
 
 	$this->write_packet(SMFIR_ADDHEADER, "$header\0$value\0");
 	1;
