@@ -134,10 +134,12 @@ sub setconn ($) {
 
 sub setdbg ($) {
 	# no-op
+	1;
 }
 
 sub settimeout ($) {
 	# no-op
+	1;
 }
 
 1;
