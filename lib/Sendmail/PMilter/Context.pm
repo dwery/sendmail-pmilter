@@ -98,6 +98,8 @@ use constant SMFIC_DATA		=> 'T'; # v4
 use constant SMFIC_UNKNOWN	=> 'U'; # v3
 use constant SMFIC_QUIT_NC	=> 'K'; # v6?
 
+# responses from milter to MTA
+
 use constant SMFIR_ADDRCPT	=> '+';
 use constant SMFIR_DELRCPT	=> '-';
 use constant SMFIR_ACCEPT	=> 'a';
@@ -110,7 +112,8 @@ use constant SMFIR_CHGHEADER	=> 'm';
 use constant SMFIR_PROGRESS	=> 'p';
 use constant SMFIR_QUARANTINE	=> 'q';
 use constant SMFIR_REJECT	=> 'r';
-use constant SMFIR_SETSENDER	=> 's';
+use constant SMFIR_SETSENDER	=> 'e'; # 8.14
+use constant SMFIR_SKIP		=> 's'; # 8.14
 use constant SMFIR_TEMPFAIL	=> 't';
 use constant SMFIR_REPLYCODE	=> 'y';
 
@@ -794,7 +797,7 @@ sub replacebody ($$) {
 Replace the envelope sender address for the given mail message.  This
 method provides an implementation to access the mlfi_setsender method
 added to the libmilter library as part of the mlfi-setsender project 
-(http://www.sourceforge.net/projects/mlfi-setsender).
+(http://www.sourceforge.net/projects/mlfi-setsender) and merged in sendmail 8.14.
 
 Returns a true value on success, undef on failure.  A success return does
 not necessarily indicate that the recipient was successfully removed, but
@@ -806,7 +809,6 @@ sub setsender ($$) {
 	my $this = shift;
 	my $sender = shift || die "setsender: no sender specified\n";
 
-	die "setsender: not enabled (see \"perldoc Sendmail::PMilter\" for information)\n" unless $Sendmail::PMilter::enable_setsender;
 	die "setsender: called outside of EOM\n" if ($this->{cb} ne 'eom');
 	die "setsender: SMFIF_SETSENDER not in capability list\n" unless ($this->{callback_flags} & SMFIF_SETSENDER);
 

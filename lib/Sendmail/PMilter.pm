@@ -114,8 +114,6 @@ our %EXPORT_TAGS = ( all => [ @smflags ] );
 use constant SMFIF_QUARANTINE	=> 0x20;
 use constant SMFIF_SETSENDER	=> 0x40;
 
-our $enable_setsender = 0;
-
 ##### Methods
 
 sub new ($) {
@@ -1033,12 +1031,6 @@ are not known, however, C<SMFI_CURR_ACTS> should be used.
 this flag, Sendmail must be patched with the diff available from:
 
   C<http://www.sourceforge.net/projects/mlfi-setsender>
-
-Additionally, the following statement must appear after the "use"
-statements in your milter program; otherwise, setsender() will always fail
-when called:
-
-  local $Sendmail::PMilter::enable_setsender = 1;
 
 =back
 
