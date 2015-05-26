@@ -44,6 +44,7 @@ use POSIX;
 use Sendmail::Milter 0.18; # get needed constants
 use Socket;
 use Symbol;
+use Time::HiRes 'time';
 use UNIVERSAL;
 
 our $VERSION = '1.20';
@@ -652,6 +653,7 @@ C<threads> module (available on Perl 5.8 or later only).
 sub ithread_dispatcher {
 	require threads;
 	require threads::shared;
+	require Thread::Semaphore;
 
 	my $nchildren = 0;
 
@@ -662,6 +664,11 @@ sub ithread_dispatcher {
 		my $lsocket = shift;
 		my $handler = shift;
 		my $maxchildren = $this->get_max_interpreters();
+		my $child_sem;
+
+		if ($maxchildren) {
+			$child_sem = Thread::Semaphore->new($maxchildren);
+		}
 
 		my $siginfo = exists($SIG{INFO}) ? 'INFO' : 'USR1';
 		local $SIG{$siginfo} = sub {
@@ -679,6 +686,9 @@ sub ithread_dispatcher {
 
 			lock($nchildren);
 			$nchildren--;
+			if ($child_sem) {
+				$child_sem->up();
+			}
 			warn $died if $died;
 		};
 
@@ -688,18 +698,12 @@ sub ithread_dispatcher {
 
 			warn "$$: incoming connection\n" if ($DEBUG > 0);
 
-			# If the load's too high, fail and go back to top of loop.
-			if ($maxchildren) {
-				my $cnchildren = $nchildren; # make constant
-
-				if ($cnchildren >= $maxchildren) {
-					warn "load too high: children $cnchildren >= max $maxchildren";
-
-					$socket->autoflush(1);
-					$socket->print(pack('N/a*', 't')); # SMFIR_TEMPFAIL
-					$socket->close();
-					next;
-				}
+			if ($child_sem and ! $child_sem->down_nb()) {
+				warn "pausing for high load: children $nchildren >= max $maxchildren";
+				my $start = time();
+				$child_sem->down();
+				my $end = time();
+				warn sprintf("paused for %.1f seconds due to high load", $end - $start);
 			}
 
 			# scoping block for lock()
@@ -865,6 +869,10 @@ to the milter socket.  This is adequate for machines that get bursty but
 otherwise mostly idle mail traffic, as the idle-time resource consumption is
 very low.
 
+If the maximum number of interpreters is running when a new connection
+comes in, this dispatcher blocks until a slot becomes available for a
+new interpreter.
+
 =cut
 
 sub postfork_dispatcher () {
@@ -898,17 +906,22 @@ sub postfork_dispatcher () {
 			warn "$$: incoming connection\n" if ($DEBUG > 0);
 
 			# If the load's too high, fail and go back to top of loop.
-			if ($maxchildren) {
+			my $paused = undef;
+			while ($maxchildren) {
 				my $cnchildren = $nchildren; # make constant
 
 				if ($cnchildren >= $maxchildren) {
-					warn "load too high: children $cnchildren >= max $maxchildren";
-
-					$socket->autoflush(1);
-					$socket->print(pack('N/a*', 't')); # SMFIR_TEMPFAIL
-					$socket->close();
-					next;
+					warn "pausing for high load: children $cnchildren >= max $maxchildren";
+					$paused = time() if (! $paused);
+					pause();
 				}
+				else {
+					last;
+				}
+			}
+
+			if ($paused) {
+				warn sprintf("paused for %.1f seconds due to high load", time() - $paused);
 			}
 
 			my $pid = fork();
